@@ -28,7 +28,7 @@ public class Worker : BackgroundService
                 await ProcessLogs();
 
                 //config interval kicksin
-                var intervalSeconds = _configuration.GetValue<int>("LogAnalyzer:IntervalSeconds", 30);
+                var intervalSeconds = _configuration.GetValue<int>("LogAnalyzer:IntervalSeconds", 3);
                 await Task.Delay(TimeSpan.FromSeconds(intervalSeconds), stoppingToken);
             }
             catch (Exception ex)
@@ -79,12 +79,36 @@ public class Worker : BackgroundService
 
             try
             {
-                foreach (var line in lines.Take(5))
+                var entries = new List<LogEntry>();
+                foreach (var line in lines)
                 {
                     var entry = LogParser.Parse(line);
                     if (entry == null)
-                        throw new FormatException("Log line is malformed or empty.");
+                        throw new FormatException("Error parsing log file lines.");
+                    entries.Add(entry);
+                }
 
+                //count by level
+                var infoCount = entries.Count(e => e.Level == "INFO");
+                var warningCount = entries.Count(e => e.Level == "WARNING");
+                var errorCount = entries.Count(e => e.Level == "ERROR");
+
+                _logger.LogInformation("INFO: {info}, WARNING: {warn}, ERROR: {error}", infoCount, warningCount, errorCount);
+
+                // aggr most common error message
+                var mostCommonError = entries
+                    .Where(e => e.Level == "ERROR")
+                    .GroupBy(e => e.Message)
+                    .OrderByDescending(g => g.Count())
+                    .FirstOrDefault();
+
+                if (mostCommonError != null)
+                {
+                    _logger.LogInformation("Most common ERROR: \"{msg}\" occurred {count} times", mostCommonError.Key, mostCommonError.Count());
+                }
+
+                foreach (var entry in entries.Take(5))
+                {
                     _logger.LogInformation("[{level}] {time}: {msg}", entry.Level, entry.Timestamp, entry.Message);
                 }
             }
