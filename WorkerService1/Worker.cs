@@ -25,7 +25,6 @@ public class Worker : BackgroundService
             {
                 _logger.LogInformation("Log analyzer running at: {time}", DateTimeOffset.Now);
 
-                //TODO: log analysis build out in task2
                 await ProcessLogs();
 
                 //config interval kicksin
@@ -82,13 +81,14 @@ public class Worker : BackgroundService
             {
                 foreach (var line in lines.Take(5))
                 {
-                    // null or empty lines = parsing error
-                    if (string.IsNullOrWhiteSpace(line))
-                        throw new FormatException("Log line is null or empty.");
+                    var entry = LogParser.Parse(line);
+                    if (entry == null)
+                        throw new FormatException("Log line is malformed or empty.");
 
-                    _logger.LogInformation("[LOG]: {line}", line);
+                    _logger.LogInformation("[{level}] {time}: {msg}", entry.Level, entry.Timestamp, entry.Message);
                 }
             }
+
             catch (FormatException ex)
             {
                 throw new LogFileParseException("Error parsing log file lines.", ex);
