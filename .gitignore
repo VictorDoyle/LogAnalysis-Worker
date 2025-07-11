@@ -287,3 +287,26 @@ __pycache__/
 *.btm.cs
 *.odx.cs
 *.xsd.cs
+
+# Log files 
+*.log
+logs/
+sample-logs/
+
+# Report outputs 
+reports/
+output/
+*.report
+
+# Config
+appsettings.Production.json
+appsettings.Staging.json
+
+# local development
+*.db
+*.sqlite
+*.sqlite3
+
+#env
+.env
+.env.local
