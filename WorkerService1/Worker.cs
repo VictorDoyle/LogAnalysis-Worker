@@ -13,6 +13,10 @@ public class Worker : BackgroundService
         _configuration = configuration;
     }
 
+#if DEBUG
+    public async Task InvokeProcessLogsForTest() => await ProcessLogs();
+#endif
+
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
         while (!stoppingToken.IsCancellationRequested)
@@ -78,9 +82,9 @@ public class Worker : BackgroundService
             {
                 foreach (var line in lines.Take(5))
                 {
-                    // simu possible parsing error
-                    if (line == null)
-                        throw new FormatException("Log line is null.");
+                    // null or empty lines = parsing error
+                    if (string.IsNullOrWhiteSpace(line))
+                        throw new FormatException("Log line is null or empty.");
 
                     _logger.LogInformation("[LOG]: {line}", line);
                 }
