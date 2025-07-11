@@ -13,6 +13,10 @@ public class Worker : BackgroundService
         _configuration = configuration;
     }
 
+#if DEBUG
+    public async Task InvokeProcessLogsForTest() => await ProcessLogs();
+#endif
+
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
         while (!stoppingToken.IsCancellationRequested)
@@ -40,21 +44,75 @@ public class Worker : BackgroundService
     {
         var logFilePath = _configuration.GetValue<string>("LogAnalyzer:LogFilePath");
 
-        if (string.IsNullOrEmpty(logFilePath) || !File.Exists(logFilePath))
+        try
         {
-            _logger.LogWarning("Log file not found: {path}", logFilePath);
-            return;
+            if (string.IsNullOrEmpty(logFilePath))
+            {
+                throw new LogFileNotFoundException("Path is null or empty.");
+            }
+
+            if (!File.Exists(logFilePath))
+            {
+                throw new LogFileNotFoundException(logFilePath);
+            }
+
+            _logger.LogInformation("Processing log file: {path}", logFilePath);
+
+            string[] lines;
+            try
+            {
+                lines = await File.ReadAllLinesAsync(logFilePath);
+            }
+            catch (UnauthorizedAccessException ex)
+            {
+                throw new LogFileReadException(logFilePath, ex);
+            }
+            catch (IOException ex)
+            {
+                throw new LogFileReadException(logFilePath, ex);
+            }
+            catch (Exception ex)
+            {
+                throw new LogFileReadException(logFilePath, ex);
+            }
+
+            _logger.LogInformation("Total lines in log file: {count}", lines.Length);
+
+            try
+            {
+                foreach (var line in lines.Take(5))
+                {
+                    // null or empty lines = parsing error
+                    if (string.IsNullOrWhiteSpace(line))
+                        throw new FormatException("Log line is null or empty.");
+
+                    _logger.LogInformation("[LOG]: {line}", line);
+                }
+            }
+            catch (FormatException ex)
+            {
+                throw new LogFileParseException("Error parsing log file lines.", ex);
+            }
+            catch (Exception ex)
+            {
+                throw new LogFileParseException("Unknown error during log parsing.", ex);
+            }
         }
-
-        _logger.LogInformation("Processing log file: {path}", logFilePath);
-
-        var lines = await File.ReadAllLinesAsync(logFilePath);
-        _logger.LogInformation("Total lines in log file: {count}", lines.Length);
-
-        //TODO:parsing logic to add here / onlyshowing 5 lines for now
-        foreach (var line in lines.Take(5))
+        catch (LogFileNotFoundException ex)
         {
-            _logger.LogInformation("[LOG]: {line}", line);
+            _logger.LogWarning(ex, ex.Message);
+        }
+        catch (LogFileReadException ex)
+        {
+            _logger.LogError(ex, ex.Message);
+        }
+        catch (LogFileParseException ex)
+        {
+            _logger.LogError(ex, ex.Message);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Unexpected error in ProcessLogs");
         }
     }
 }
